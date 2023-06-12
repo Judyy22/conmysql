@@ -3,10 +3,11 @@ const app = express();
 const port = 3000;
 
 const mysql = require("mysql2");
-const ejs = require("ejs");
+const bodyParser = require("body-parser");
 
-app.set("view engine", "ejs");
+app.set(port);
 
+//MySQL 연결 설정
 const con = mysql.createConnection({
     host: "localhost",
     port: "3306",
@@ -15,42 +16,92 @@ const con = mysql.createConnection({
     database: "testdb",
 });
 
+//MySQL 연결
 con.connect(function (err) {
-    if (err) throw err;
-    console.log("Connected");
-});
+    if (err) {
+        console.error("Error connecting to MySQL database: " + err.stack);
+        return;
+    }
+    console.log("Connected to MySQL database as id " + con.threadId);
 
-app.get("/", (request, response) => {
-    const sql = "select * from course";
-    con.query(sql, function (err, result, fields) {
-        if (err) throw err;
-        response.render("index", { course: result });
+    // 테이블 생성 쿼리 실행
+    const createTableQuery = `
+        CREATE TABLE IF NOT EXISTS users (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL
+        )
+      `;
+
+    con.query(createTableQuery, (error) => {
+        if (error) {
+            console.error("Error creating users table: " + error.stack);
+            return;
+        }
+        console.log("Users table created successfully");
     });
 });
 
-app.get("/delete/:ID", (req, res) => {
-    const sql = "DELETE FROM course WHERE ID = ?";
-    con.query(sql, [req.params.ID], function (err, result, fields) {
-        if (err) throw err;
-        console.log(result);
-        res.redirect("/");
+// body-parser 미들웨어 사용
+app.use(bodyParser.json());
+
+app.get("/", function (req, res) {
+    res.sendFile(__dirname + "/public/index.html");
+});
+
+// GET 요청 처리 - 모든 사용자 가져오기
+app.get("/users", (req, res) => {
+    con.query("SELECT * FROM users", (error, results) => {
+        if (error) {
+            console.error("Error executing MySQL query: " + error.stack);
+            return res.status(500).send("Error executing MySQL query");
+        }
+        res.send(results);
     });
 });
 
-app.post("/update/:ID", (req, res) => {
-    const sql = "UPDATE course SET ? WHERE ID = " + req.params.ID;
-    con.query(sql.req.body, function (err, result, fields) {
-        if (err) throw err;
-        console.log(result);
-        res.redirect("/");
-    });
+// POST 요청 처리 - 새로운 사용자 추가
+app.post("/users", (req, res) => {
+    const { name, email } = req.body;
+    con.query(
+        "INSERT INTO users (name, email) VALUES (?, ?)",
+        [name, email],
+        (error, results) => {
+            if (error) {
+                console.error("Error executing MySQL query: " + error.stack);
+                return res.status(500).send("Error executing MySQL query");
+            }
+            res.send(results);
+        }
+    );
 });
 
-app.get("/edit/:ID", (req, res) => {
-    const sql = "SELECT * FROM course WHERE ID = ?";
-    con.query(sql, [req.params.ID], function (err, result, fields) {
-        if (err) throw err;
-        res.render("edit", { course: result });
+// PUT 요청 처리 - 사용자 정보 업데이트
+app.put("/users/:id", (req, res) => {
+    const { name, email } = req.body;
+    const userId = req.params.id;
+    con.query(
+        "UPDATE users SET name = ?, email = ? WHERE id = ?",
+        [name, email, userId],
+        (error, results) => {
+            if (error) {
+                console.error("Error executing MySQL query: " + error.stack);
+                return res.status(500).send("Error executing MySQL query");
+            }
+            res.send(results);
+        }
+    );
+});
+
+// DELETE 요청 처리 - 사용자 삭제
+app.delete("/users/:id", (req, res) => {
+    const userId = req.params.id;
+    con.query("DELETE FROM users WHERE id = ?", [userId], (error, results) => {
+        if (error) {
+            console.error("Error executing MySQL query: " + error.stack);
+            return res.status(500).send("Error executing MySQL query");
+        }
+        res.send(results);
     });
 });
 
